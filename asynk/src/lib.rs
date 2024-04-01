@@ -10,7 +10,7 @@ use std::future::Future;
 pub use {
     builder::AsynkBuilder,
     executor::{handle::JoinHandle, BlockOnError},
-    net::tcp::{stream::TcpStream, TcpListener},
+    net::tcp::{stream::TcpStream, Accept, TcpListener},
     tp::ThreadPool,
 };
 
