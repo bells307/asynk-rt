@@ -1,4 +1,4 @@
-use asynk_hyper::{TcpListener, TcpStream};
+use asynk_hyper::TcpListener;
 use futures::StreamExt;
 use http_body_util::Full;
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Request, Response};
@@ -22,7 +22,6 @@ async fn server() {
         asynk::spawn(async move {
             // Accept the connection
             let (stream, _) = res.unwrap();
-            let stream = TcpStream::from(stream);
 
             if let Err(e) = http1::Builder::new()
                 .serve_connection(stream, service_fn(hello))

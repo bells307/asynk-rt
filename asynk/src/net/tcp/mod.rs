@@ -5,7 +5,7 @@ use crate::reactor::io_handle::IoHandle;
 use futures::Stream;
 use mio::{net::TcpListener as MioTcpListener, Interest};
 use std::{
-    io,
+    io::{self, Result},
     net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
@@ -14,7 +14,7 @@ use std::{
 pub struct TcpListener(MioTcpListener);
 
 impl TcpListener {
-    pub fn bind(addr: SocketAddr) -> io::Result<Self> {
+    pub fn bind(addr: SocketAddr) -> Result<Self> {
         Ok(Self(MioTcpListener::bind(addr)?))
     }
 
@@ -32,7 +32,7 @@ impl From<MioTcpListener> for Accept {
 }
 
 impl Stream for Accept {
-    type Item = io::Result<(TcpStream, SocketAddr)>;
+    type Item = Result<(TcpStream, SocketAddr)>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.0.source().accept() {
