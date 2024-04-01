@@ -78,7 +78,7 @@ async fn server() -> io::Result<()> {
 
 async fn client() -> io::Result<()> {
     let addr = SERVER_SOCK_ADDR.parse().map_err(Error::other)?;
-    
+
     loop {
         let mut stream = TcpStream::connect(addr)?;
 

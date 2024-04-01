@@ -88,9 +88,9 @@ impl Reactor {
     }
 
     pub fn poll_events_routine(wakers: Arc<Slab<Waker>>, mut poll: Poll) {
-        loop {
-            let mut events = Events::with_capacity(1024);
+        let mut events = Events::with_capacity(1024);
 
+        loop {
             poll.poll(&mut events, None).unwrap();
 
             for event in events.into_iter() {

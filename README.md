@@ -1,5 +1,5 @@
 # asynk
-Rust asynchronous runtime
+Rust multithread asynchronous runtime and reactor
 
 ## Example
 ```rust
