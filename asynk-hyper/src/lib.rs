@@ -1,12 +1,26 @@
 use asynk::TcpStream;
 use futures::{AsyncRead, AsyncWrite};
-use hyper::rt::{Read, ReadBufCursor, Write};
+use hyper::rt::{Executor, Read, ReadBufCursor, Write};
 use std::{
+    future::Future,
     io::Result,
     mem::MaybeUninit,
     pin::Pin,
     task::{ready, Context, Poll},
 };
+
+#[derive(Clone)]
+pub struct AsynkExecutor;
+
+impl<Fut> Executor<Fut> for AsynkExecutor
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    fn execute(&self, fut: Fut) {
+        asynk::spawn(fut);
+    }
+}
 
 pub struct HyperTcpStream(TcpStream);
 

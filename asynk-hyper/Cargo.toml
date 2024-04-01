@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 asynk = { path = "../asynk" }
 
-hyper = { version = "1.2.0", features = ["server", "http1"] }
+hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
 futures = "0.3.30"
 http-body-util = "0.1.1"
