@@ -8,7 +8,7 @@ use std::{
 
 const SERVER_SOCK_ADDR: &str = "127.0.0.1:8040";
 
-const RESPONSE: &str = "HTTP/1.1 200 OK
+const SERVER_RESPONSE: &str = "HTTP/1.1 200 OK
 Content-Type: text/html
 Connection: keep-alive
 Content-Length: 23
@@ -56,16 +56,14 @@ async fn server() -> io::Result<()> {
             loop {
                 let read = stream.read(&mut buf).await?;
 
-                for b in &buf[0..read] {
-                    data.push(*b);
-                }
+                data.extend(&buf[0..read]);
 
                 if data.windows(4).any(is_double_crnl) || read == 0 {
                     break;
                 }
             }
 
-            stream.write_all(RESPONSE.as_bytes()).await?;
+            stream.write_all(SERVER_RESPONSE.as_bytes()).await?;
 
             stream.flush().await?;
 
@@ -89,6 +87,8 @@ async fn client() -> io::Result<()> {
         stream.read_to_string(&mut resp).await?;
 
         println!("resp: {resp}");
+
+        stream.flush().await?;
 
         Delay::new(Duration::from_millis(100)).await;
     }
