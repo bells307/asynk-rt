@@ -1,4 +1,6 @@
-use asynk::TcpStream;
+pub use asynk::net::TcpListener;
+
+use asynk::net::TcpStream as AsynkTcpStream;
 use futures::{AsyncRead, AsyncWrite};
 use hyper::rt::{Executor, Read, ReadBufCursor, Write};
 use std::{
@@ -22,15 +24,16 @@ where
     }
 }
 
-pub struct HyperTcpStream(TcpStream);
+/// TcpStream adapter for `hyper`
+pub struct TcpStream(AsynkTcpStream);
 
-impl From<TcpStream> for HyperTcpStream {
-    fn from(stream: TcpStream) -> Self {
+impl From<AsynkTcpStream> for TcpStream {
+    fn from(stream: AsynkTcpStream) -> Self {
         Self(stream)
     }
 }
 
-impl Read for HyperTcpStream {
+impl Read for TcpStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -47,7 +50,7 @@ impl Read for HyperTcpStream {
     }
 }
 
-impl Write for HyperTcpStream {
+impl Write for TcpStream {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

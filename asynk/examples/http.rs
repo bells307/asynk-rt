@@ -1,4 +1,4 @@
-use asynk::{TcpListener, TcpStream};
+use asynk::net::{TcpListener, TcpStream};
 use futures::{future, AsyncReadExt, AsyncWriteExt, StreamExt};
 use futures_timer::Delay;
 use std::{

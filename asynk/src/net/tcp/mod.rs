@@ -1,5 +1,6 @@
-pub mod stream;
+pub(crate) mod stream;
 
+use super::TcpStream;
 use crate::reactor::io_handle::IoHandle;
 use futures::Stream;
 use mio::{net::TcpListener as MioTcpListener, Interest};
@@ -9,8 +10,6 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-
-use self::stream::TcpStream;
 
 pub struct TcpListener(MioTcpListener);
 

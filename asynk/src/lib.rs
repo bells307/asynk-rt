@@ -1,6 +1,7 @@
+pub mod net;
+
 mod builder;
 mod executor;
-mod net;
 mod reactor;
 mod tp;
 
@@ -10,14 +11,15 @@ use std::future::Future;
 pub use {
     builder::AsynkBuilder,
     executor::{handle::JoinHandle, BlockOnError},
-    net::tcp::{stream::TcpStream, Accept, TcpListener},
     tp::ThreadPool,
 };
 
+/// Runtime builder
 pub fn builder() -> AsynkBuilder {
     AsynkBuilder::new()
 }
 
+/// Block current thread on the provided asynchronous task
 pub fn block_on<T>(fut: impl Future<Output = T> + Send + 'static) -> Result<T, BlockOnError>
 where
     T: Send + 'static,
@@ -25,6 +27,7 @@ where
     Executor::get().block_on(fut)
 }
 
+/// Spawn new asynchronous task
 pub fn spawn<T>(fut: impl Future<Output = T> + Send + 'static) -> JoinHandle<T>
 where
     T: Send + 'static,
