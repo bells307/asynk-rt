@@ -34,3 +34,11 @@ where
 {
     Executor::get().spawn(fut)
 }
+
+/// Spawn synchronous task on dedicated thread pool
+pub fn spawn_blocking<T>(f: impl Fn() -> T + Send + 'static) -> JoinHandle<T>
+where
+    T: Send + 'static,
+{
+    Executor::get().spawn_blocking(f)
+}

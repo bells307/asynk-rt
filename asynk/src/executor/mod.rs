@@ -4,6 +4,7 @@ mod task;
 
 use crate::tp::ThreadPool;
 use crate::JoinHandle;
+use futures::channel::oneshot;
 use parking_lot::Mutex;
 use std::future::Future;
 use std::pin::Pin;
@@ -14,17 +15,19 @@ use std::thread::{self, Thread};
 use self::task::{BlockedOnTaskWaker, SpawnedTaskWaker, Task};
 
 pub struct Executor {
-    thread_pool: ThreadPool,
-    block_on_thread: Mutex<Option<Thread>>,
+    task_tp: ThreadPool,
+    blocking_tp: ThreadPool,
+    block_on_thr: Mutex<Option<Thread>>,
 }
 
 static EXECUTOR: OnceLock<Executor> = OnceLock::new();
 
 impl Executor {
-    pub fn new(thread_pool: ThreadPool) -> Self {
+    pub fn new(task_tp: ThreadPool, blocking_tp: ThreadPool) -> Self {
         Self {
-            thread_pool,
-            block_on_thread: Mutex::new(None),
+            task_tp,
+            blocking_tp,
+            block_on_thr: Mutex::new(None),
         }
     }
 
@@ -43,7 +46,7 @@ impl Executor {
     where
         T: Send + 'static,
     {
-        *self.block_on_thread.lock() = Some(thread::current());
+        *self.block_on_thr.lock() = Some(thread::current());
 
         let (task, mut jh) = Task::<T, BlockedOnTaskWaker>::new(fut);
         task.clone().wake();
@@ -75,8 +78,25 @@ impl Executor {
         jh
     }
 
+    pub fn spawn_blocking<T>(&self, f: impl Fn() -> T + Send + 'static) -> JoinHandle<T>
+    where
+        T: Send + 'static,
+    {
+        let (tx, rx) = oneshot::channel();
+
+        let tx = Mutex::new(Some(tx));
+        self.blocking_tp.spawn(move || {
+            let out = f();
+            if let Some(tx) = tx.lock().take() {
+                tx.send(out).ok();
+            };
+        });
+
+        JoinHandle::new(rx)
+    }
+
     fn unpark_blocked_thread(&self) {
-        self.block_on_thread
+        self.block_on_thr
             .lock()
             .take()
             .expect("block on thread is not set")

@@ -8,13 +8,15 @@ use std::{
 };
 
 pub(super) struct Inner {
+    name: String,
     job_queue: JobQueue,
     threads: Mutex<Option<HashMap<ThreadId, JoinHandle<()>>>>,
 }
 
 impl Inner {
-    pub fn new(thread_count: usize) -> Arc<Self> {
+    pub fn new(name: String, thread_count: usize) -> Arc<Self> {
         let this = Arc::new(Self {
+            name,
             job_queue: JobQueue::new(),
             threads: Mutex::new(None),
         });
@@ -56,15 +58,18 @@ impl Inner {
     fn create_worker(self: Arc<Self>) {
         let this = Arc::clone(&self);
 
-        let jh = thread::spawn(move || {
-            // In case of thread panic that object will call the recovery function
-            drop_panic! {
-                Arc::clone(&this).panic_handler()
-            };
+        let jh = thread::Builder::new()
+            .name(self.name.clone())
+            .spawn(move || {
+                // In case of thread panic that object will call the recovery function
+                drop_panic! {
+                    Arc::clone(&this).panic_handler()
+                };
 
-            // Start working cycle
-            Arc::clone(&this).worker_routine()
-        });
+                // Start working cycle
+                Arc::clone(&this).worker_routine()
+            })
+            .expect("spawn worker thread");
 
         let id = jh.thread().id();
 

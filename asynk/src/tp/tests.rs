@@ -5,7 +5,7 @@ use std::{sync::mpsc, thread, time::Duration};
 fn test_thread_pool() {
     let thread_count = 4;
 
-    let tp = ThreadPool::new(thread_count);
+    let tp = ThreadPool::new("test".into(), thread_count);
 
     let (tx, rx) = mpsc::channel();
 
@@ -21,7 +21,7 @@ fn test_thread_pool() {
 
 #[test]
 fn test_thread_pool_panic() {
-    let tp = ThreadPool::new(4);
+    let tp = ThreadPool::new("test".into(), 4);
 
     tp.spawn(|| {
         thread::sleep(Duration::from_secs(1));

@@ -14,8 +14,8 @@ pub type Job = Box<dyn Fn() + Send>;
 pub struct ThreadPool(Arc<Inner>);
 
 impl ThreadPool {
-    pub fn new(thread_count: usize) -> Self {
-        Self(Inner::new(thread_count))
+    pub fn new(name: String, thread_count: usize) -> Self {
+        Self(Inner::new(name, thread_count))
     }
 
     pub fn spawn(&self, job: impl Fn() + Send + 'static) {

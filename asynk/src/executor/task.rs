@@ -52,7 +52,7 @@ where
     T: Send + 'static,
 {
     fn wake(self: Arc<Self>) {
-        Executor::get().thread_pool.spawn(move || {
+        Executor::get().task_tp.spawn(move || {
             let waker = self.clone().into();
             let mut cx = Context::from_waker(&waker);
             let mut lock = self.fut.lock();
@@ -73,7 +73,7 @@ where
     fn wake(self: Arc<Self>) {
         let exec = Executor::get();
 
-        exec.thread_pool.spawn(move || {
+        exec.task_tp.spawn(move || {
             let waker = self.clone().into();
             let mut cx = Context::from_waker(&waker);
             let mut lock = self.fut.lock();

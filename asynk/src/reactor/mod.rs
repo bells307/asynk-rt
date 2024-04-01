@@ -26,10 +26,10 @@ impl Reactor {
         let wakers = Arc::new(Slab::new());
 
         // Spawn poll events thread
-        thread::spawn({
+        thread::Builder::new().name("reactor".into()).spawn({
             let wakers = Arc::clone(&wakers);
             move || Self::poll_events_routine(wakers, poll)
-        });
+        })?;
 
         Ok(Self { registry, wakers })
     }

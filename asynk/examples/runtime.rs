@@ -1,4 +1,4 @@
-use futures::{future, lock::Mutex};
+use futures::future;
 use futures_timer::Delay;
 use std::{
     sync::{
@@ -14,7 +14,7 @@ fn main() {
 }
 
 async fn main_future() {
-    let val = Arc::new(Mutex::new(AtomicU32::new(0)));
+    let val = Arc::new(AtomicU32::new(0));
     let expected_val = 10_000;
 
     let handles = (0..expected_val)
@@ -23,12 +23,12 @@ async fn main_future() {
             asynk::spawn(async move {
                 // some computations ...
                 Delay::new(Duration::from_secs(1)).await;
-                val.lock().await.fetch_add(1, Ordering::SeqCst);
+                val.fetch_add(1, Ordering::SeqCst);
             })
         })
         .collect::<Vec<_>>();
 
     future::join_all(handles).await;
 
-    assert_eq!(val.lock().await.load(Ordering::SeqCst), expected_val);
+    assert_eq!(val.load(Ordering::SeqCst), expected_val);
 }
