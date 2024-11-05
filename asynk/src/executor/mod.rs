@@ -2,7 +2,7 @@ pub(crate) mod handle;
 
 mod task;
 
-use crate::tp::ThreadPool;
+use self::task::{BlockedOnTaskWaker, SpawnedTaskWaker, Task};
 use crate::JoinHandle;
 use futures::channel::oneshot;
 use parking_lot::Mutex;
@@ -11,8 +11,7 @@ use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll, Wake};
 use std::thread::{self, Thread};
-
-use self::task::{BlockedOnTaskWaker, SpawnedTaskWaker, Task};
+use tpool::ThreadPool;
 
 pub struct Executor {
     task_tp: ThreadPool,

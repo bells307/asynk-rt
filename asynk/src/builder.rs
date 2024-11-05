@@ -1,11 +1,11 @@
-use std::io;
-
-use crate::{reactor::Reactor, Executor, ThreadPool};
+use crate::{reactor::Reactor, Executor};
+use std::{io, num::NonZeroUsize};
+use tpool::ThreadPool;
 
 #[derive(Default)]
 pub struct AsynkBuilder {
-    task_threads: Option<usize>,
-    blocking_threads: Option<usize>,
+    task_threads: Option<NonZeroUsize>,
+    blocking_threads: Option<NonZeroUsize>,
 }
 
 impl AsynkBuilder {
@@ -13,44 +13,32 @@ impl AsynkBuilder {
         Default::default()
     }
 
-    pub fn task_threads(mut self, val: usize) -> Self {
-        let val = if val == 0 {
-            Self::default_thread_count()
-        } else {
-            val
-        };
-
+    pub fn task_threads(mut self, val: NonZeroUsize) -> Self {
         self.task_threads = Some(val);
         self
     }
 
-    pub fn blocking_threads(mut self, val: usize) -> Self {
-        let val = if val == 0 {
-            Self::default_thread_count()
-        } else {
-            val
-        };
-
+    pub fn blocking_threads(mut self, val: NonZeroUsize) -> Self {
         self.blocking_threads = Some(val);
         self
     }
 
     pub fn build(self) -> io::Result<()> {
         let task_threads = self.task_threads.unwrap_or_else(Self::default_thread_count);
-        let task_tp = ThreadPool::new("task-worker".into(), task_threads);
+        let task_tp = ThreadPool::new(task_threads);
 
         let blocking_threads = self
             .blocking_threads
             .unwrap_or_else(Self::default_thread_count);
 
-        let blocking_tp = ThreadPool::new("blocking-worker".into(), blocking_threads);
+        let blocking_tp = ThreadPool::new(blocking_threads);
 
         Executor::new(task_tp, blocking_tp).set_global();
         Reactor::new()?.set_global();
         Ok(())
     }
 
-    fn default_thread_count() -> usize {
-        num_cpus::get()
+    fn default_thread_count() -> NonZeroUsize {
+        num_cpus::get().try_into().expect("can't define num cpus")
     }
 }

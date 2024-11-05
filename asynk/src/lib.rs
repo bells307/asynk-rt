@@ -3,7 +3,6 @@ pub mod net;
 mod builder;
 mod executor;
 mod reactor;
-mod tp;
 
 use executor::Executor;
 use std::future::Future;
@@ -11,7 +10,6 @@ use std::future::Future;
 pub use {
     builder::AsynkBuilder,
     executor::{handle::JoinHandle, BlockOnError},
-    tp::ThreadPool,
 };
 
 /// Runtime builder
