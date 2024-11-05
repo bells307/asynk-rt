@@ -1,4 +1,3 @@
-// use crate::reactor_global;
 use super::Reactor;
 use mio::{event::Source, Interest, Token};
 use std::{
@@ -146,6 +145,6 @@ where
     S: Source,
 {
     fn drop(&mut self) {
-        self.deregister().unwrap()
+        self.deregister().ok();
     }
 }
