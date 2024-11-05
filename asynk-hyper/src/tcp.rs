@@ -56,6 +56,7 @@ impl Read for TcpStream {
             let b = buf.as_mut();
             let b = &mut *(b as *mut [MaybeUninit<u8>] as *mut [u8]);
             let n = ready!(Pin::new(&mut self.0).poll_read(cx, b))?;
+            // TODO: safety?
             buf.advance(n);
         };
 

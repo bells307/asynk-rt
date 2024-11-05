@@ -21,11 +21,7 @@ fn main() {
 
     asynk::block_on(async {
         let server = asynk::spawn(server());
-        // let client = asynk::spawn(client());
-        // let (server, client) = future::join(server, client).await;
-        // server.unwrap().unwrap();
-        // client.unwrap().unwrap();
-        server.await.unwrap().unwrap()
+        server.await.unwrap().unwrap();
     })
     .unwrap();
 }
@@ -50,23 +46,15 @@ async fn server() -> io::Result<()> {
             // Accept the connection
             let (mut stream, _) = res?;
 
-            let mut buf = [0; 1024];
-            // HTTP request data
-            let mut data = Vec::with_capacity(128);
-
             loop {
-                let read = stream.read(&mut buf).await?;
+                let mut buf = [0; 1024];
 
-                data.extend(&buf[0..read]);
-
-                if data.windows(4).any(is_double_crnl) || read == 0 {
+                if stream.read(&mut buf).await? == 0 {
                     break;
                 }
+
+                stream.write_all(&buf).await?;
             }
-
-            stream.write_all(SERVER_RESPONSE.as_bytes()).await?;
-
-            stream.flush().await?;
 
             Ok::<_, Error>(())
         });

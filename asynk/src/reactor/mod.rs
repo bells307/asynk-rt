@@ -28,7 +28,7 @@ impl Reactor {
         // Spawn poll events thread
         thread::Builder::new().name("reactor".into()).spawn({
             let wakers = Arc::clone(&wakers);
-            move || Self::poll_events_routine(wakers, poll)
+            move || Self::poll_events_loop(wakers, poll)
         })?;
 
         Ok(Self { registry, wakers })
@@ -87,13 +87,15 @@ impl Reactor {
         Ok(new_token)
     }
 
-    pub fn poll_events_routine(wakers: Arc<Slab<Waker>>, mut poll: Poll) {
+    pub fn poll_events_loop(wakers: Arc<Slab<Waker>>, mut poll: Poll) {
         let mut events = Events::with_capacity(1024);
 
         loop {
             poll.poll(&mut events, None).unwrap();
 
             for event in events.into_iter() {
+                println!("got event {:?} for {:?}", event, event.token());
+
                 if let Some(waker) = wakers.get(event.token().into()) {
                     // Call waker interested by this event
                     waker.wake_by_ref();

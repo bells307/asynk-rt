@@ -33,7 +33,8 @@ async fn server() {
     }
 }
 
-async fn hello(_: Request<impl hyper::body::Body>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn hello(req: Request<impl hyper::body::Body>) -> Result<Response<Full<Bytes>>, Infallible> {
+    println!("got request: {:#?}", req.headers());
     Ok(Response::new(Full::new(Bytes::from(
         "<h1>Hello, World!</h1>",
     ))))

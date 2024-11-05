@@ -70,6 +70,8 @@ where
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<Result<usize>> {
+        println!("{:?}: poll_read", self.token);
+
         if !self.waiting_read {
             self.register(Interest::READABLE, cx.waker().clone())?;
             self.waiting_read = true;
@@ -100,6 +102,8 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize>> {
+        println!("{:?}: poll_write", self.token);
+
         if !self.waiting_write {
             self.register(Interest::WRITABLE, cx.waker().clone())?;
             self.waiting_write = true;
