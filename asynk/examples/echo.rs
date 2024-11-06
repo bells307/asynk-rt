@@ -18,7 +18,7 @@ async fn server() -> io::Result<()> {
     let addr = SERVER_SOCK_ADDR.parse().map_err(Error::other)?;
 
     let listener = TcpListener::bind(addr)?;
-    let mut accept = listener.accept();
+    let mut accept = listener.accept()?;
 
     while let Some(res) = accept.next().await {
         // Spawn new task for the connection

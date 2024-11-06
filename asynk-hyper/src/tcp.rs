@@ -1,7 +1,7 @@
 use futures::{AsyncRead, AsyncWrite, Stream, StreamExt};
 use hyper::rt::{Read, ReadBufCursor, Write};
 use std::{
-    io::Result,
+    io,
     mem::MaybeUninit,
     net::SocketAddr,
     pin::Pin,
@@ -11,19 +11,19 @@ use std::{
 pub struct TcpListener(asynk::net::TcpListener);
 
 impl TcpListener {
-    pub fn bind(addr: SocketAddr) -> Result<Self> {
+    pub fn bind(addr: SocketAddr) -> io::Result<Self> {
         Ok(Self(asynk::net::TcpListener::bind(addr)?))
     }
 
-    pub fn accept(self) -> Accept {
-        Accept(self.0.accept())
+    pub fn accept(self) -> io::Result<Accept> {
+        Ok(Accept(self.0.accept()?))
     }
 }
 
 pub struct Accept(asynk::net::Accept);
 
 impl Stream for Accept {
-    type Item = Result<(TcpStream, SocketAddr)>;
+    type Item = io::Result<(TcpStream, SocketAddr)>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let Some(res) = ready!(self.0.poll_next_unpin(cx)) else {
@@ -51,7 +51,7 @@ impl Read for TcpStream {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut buf: ReadBufCursor<'_>,
-    ) -> Poll<Result<()>> {
+    ) -> Poll<io::Result<()>> {
         unsafe {
             let b = buf.as_mut();
             let b = &mut *(b as *mut [MaybeUninit<u8>] as *mut [u8]);
@@ -69,15 +69,15 @@ impl Write for TcpStream {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize>> {
+    ) -> Poll<io::Result<usize>> {
         Pin::new(&mut self.0).poll_write(cx, buf)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.0).poll_flush(cx)
     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.0).poll_close(cx)
     }
 }

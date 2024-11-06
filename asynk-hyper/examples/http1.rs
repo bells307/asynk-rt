@@ -15,7 +15,7 @@ async fn server() {
     let addr = SERVER_SOCK_ADDR.parse().unwrap();
 
     let listener = TcpListener::bind(addr).unwrap();
-    let mut accept = listener.accept();
+    let mut accept = listener.accept().unwrap();
 
     while let Some(res) = accept.next().await {
         // Spawn new task for the connection

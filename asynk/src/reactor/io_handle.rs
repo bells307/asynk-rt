@@ -1,12 +1,9 @@
-use super::{Direction, Reactor};
-use mio::{event::Source, Token};
-use parking_lot::Mutex;
+use super::{direction::WakerMap, Direction, Reactor};
+use mio::{event::Source, Interest, Token};
 use std::{
-    future::Future,
-    io::{ErrorKind, Read, Result, Write},
+    io::{self, ErrorKind, Read, Write},
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 /// Wrapper for an I/O source with event tracking capabilities for reading/writing
@@ -16,9 +13,8 @@ where
 {
     /// Tracked source
     source: S,
-    registered_directions: [bool; 2],
     /// Currently registered mio token
-    token: Option<Token>,
+    token: Token,
 }
 
 impl<S> Unpin for IoHandle<S> where S: Source {}
@@ -27,12 +23,9 @@ impl<S> IoHandle<S>
 where
     S: Source,
 {
-    pub fn new(source: S) -> Self {
-        Self {
-            source,
-            registered_directions: [false, false],
-            token: None,
-        }
+    pub fn try_new(mut source: S, interests: Interest) -> io::Result<Self> {
+        let token = Reactor::get().register(&mut source, interests, WakerMap::new())?;
+        Ok(Self { source, token })
     }
 
     /// Reference to the tracked source
@@ -40,55 +33,31 @@ where
         &self.source
     }
 
-    /// Register tracking for changes in the specified direction
-    pub fn register_direction(&mut self, direction: Direction, waker: Waker) -> Result<()> {
-        let token = match self.token {
-            Some(token) => {
-                Reactor::get().add_direction_for_token(token, &mut self.source, direction, waker)?
-            }
-            None => Reactor::get().register(&mut self.source, direction, waker)?,
-        };
-
-        self.token = Some(token);
-
-        self.registered_directions[direction as usize] = true;
-
+    /// Set waker for direction
+    pub fn set_waker(&self, direction: Direction, waker: Waker) -> io::Result<()> {
+        Reactor::get().set_waker(self.token, direction, waker)?;
         Ok(())
     }
 
-    /// Remove tracking for changes in the specified direction
-    pub fn deregister_direction(&mut self, direction: Direction) -> Result<()> {
-        match self.token {
-            Some(token) => {
-                self.token = Reactor::get().remove_direction_for_token(
-                    token,
-                    &mut self.source,
-                    direction,
-                )?;
-
-                self.registered_directions[direction as usize] = false;
-                Ok(())
+    pub fn poll_io<T>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        direction: Direction,
+        mut f: impl FnMut(&mut S) -> io::Result<T>,
+    ) -> Poll<io::Result<T>> {
+        match f(&mut self.as_mut().source) {
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                self.set_waker(direction, cx.waker().clone())?;
+                Poll::Pending
             }
-            // If no token exists, there's nothing to deregister
-            None => Ok(()),
+            Err(e) => Poll::Ready(Err(e)),
         }
     }
 
-    /// Remove tracking for all directions
-    pub fn deregister_all_directions(&mut self) -> Result<()> {
-        match self.token {
-            Some(token) => {
-                Reactor::get().deregister(token, &mut self.source)?;
-                self.token = None;
-                Ok(())
-            }
-            // If no token exists, there's nothing to deregister
-            None => Ok(()),
-        }
-    }
-
-    pub fn check_direction(&self, direction: Direction) -> bool {
-        self.registered_directions[direction as usize]
+    /// Deregister source
+    fn deregister(&mut self) -> io::Result<()> {
+        Reactor::get().deregister(self.token, &mut self.source)
     }
 }
 
@@ -100,23 +69,9 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<Result<usize>> {
-        if !self.check_direction(Direction::Read) {
-            self.register_direction(Direction::Read, cx.waker().clone())?;
-            return Poll::Pending;
-        }
-
-        match self.source.read(buf) {
-            Ok(n) => {
-                if n == 0 {
-                    self.deregister_direction(Direction::Read)?;
-                }
-
-                Poll::Ready(Ok(n))
-            }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => Poll::Pending,
-            Err(e) => Poll::Ready(Err(e)),
-        }
+    ) -> Poll<io::Result<usize>> {
+        self.as_mut()
+            .poll_io(cx, Direction::Read, |source| source.read(buf))
     }
 }
 
@@ -128,39 +83,14 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize>> {
-        if !self.check_direction(Direction::Write) {
-            self.register_direction(Direction::Write, cx.waker().clone())?;
-            return Poll::Pending;
-        }
-
-        match self.source.write(buf) {
-            Ok(n) => {
-                if n == 0 {
-                    self.deregister_direction(Direction::Write)?;
-                }
-
-                Poll::Ready(Ok(n))
-            }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => Poll::Pending,
-            Err(e) => Poll::Ready(Err(e)),
-        }
+    ) -> Poll<io::Result<usize>> {
+        self.as_mut()
+            .poll_io(cx, Direction::Write, |source| source.write(buf))
     }
 
-    pub fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        if !self.check_direction(Direction::Write) {
-            self.register_direction(Direction::Write, cx.waker().clone())?;
-            return Poll::Pending;
-        }
-
-        match self.source.flush() {
-            Ok(()) => {
-                self.deregister_direction(Direction::Write)?;
-                Poll::Ready(Ok(()))
-            }
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => Poll::Pending,
-            Err(e) => Poll::Ready(Err(e)),
-        }
+    pub fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.as_mut()
+            .poll_io(cx, Direction::Read, |source| source.flush())
     }
 }
 
@@ -169,6 +99,6 @@ where
     S: Source,
 {
     fn drop(&mut self) {
-        self.deregister_all_directions().ok();
+        self.deregister().ok();
     }
 }

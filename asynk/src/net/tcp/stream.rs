@@ -1,6 +1,6 @@
 use crate::reactor::io_handle::IoHandle;
 use futures::{AsyncRead, AsyncWrite};
-use mio::net::TcpStream as MioTcpStream;
+use mio::{net::TcpStream as MioTcpStream, Interest};
 use std::{
     io::Result,
     net::{Shutdown, SocketAddr},
@@ -11,15 +11,16 @@ use std::{
 pub struct TcpStream(IoHandle<MioTcpStream>);
 
 impl TcpStream {
+    pub fn new(io_handle: IoHandle<MioTcpStream>) -> Self {
+        Self(io_handle)
+    }
+
     pub fn connect(addr: SocketAddr) -> Result<Self> {
         let stream = MioTcpStream::connect(addr)?;
-        Ok(Self(IoHandle::new(stream)))
-    }
-}
-
-impl From<MioTcpStream> for TcpStream {
-    fn from(stream: MioTcpStream) -> Self {
-        Self(IoHandle::new(stream))
+        Ok(Self(IoHandle::try_new(
+            stream,
+            Interest::READABLE.add(Interest::WRITABLE),
+        )?))
     }
 }
 
