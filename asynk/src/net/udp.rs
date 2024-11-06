@@ -1,5 +1,3 @@
-pub(crate) mod stream;
-
 use crate::reactor::{
     direction::Direction,
     io_handle::{poll_io, IoHandle},
