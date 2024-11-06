@@ -1,14 +1,18 @@
 [package]
 name = "asynk"
-version = "0.1.0"
+description = "Multithread asynchronous runtime and reactor"
+version = "0.1.1"
+authors = ["Bells307"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bells307/asynk-rt"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tpool = "0.1.3"
 parking_lot = "0.12.1"
-thiserror = "1.0.58"
+thiserror = "2.0.0"
 futures = "0.3.30"
 num_cpus = "1.16.0"
 mio = { version = "1.0.2", features = ["os-poll", "net"] }
