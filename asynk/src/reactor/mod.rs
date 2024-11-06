@@ -1,5 +1,8 @@
 pub mod io_handle;
 
+pub(crate) mod direction;
+
+use direction::Direction;
 use mio::{event::Source, Events, Interest, Poll, Registry, Token};
 use sharded_slab::Slab;
 use std::{
@@ -158,22 +161,6 @@ impl Reactor {
         self.registry.deregister(source)?;
         self.wakers.remove(token.0);
         Ok(())
-    }
-}
-
-/// Direction of interest tracking - for reading or writing
-#[derive(Clone, Copy)]
-pub enum Direction {
-    Read = 0,
-    Write = 1,
-}
-
-impl From<Direction> for Interest {
-    fn from(value: Direction) -> Self {
-        match value {
-            Direction::Read => Interest::READABLE,
-            Direction::Write => Interest::WRITABLE,
-        }
     }
 }
 

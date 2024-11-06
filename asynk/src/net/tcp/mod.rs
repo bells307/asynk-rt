@@ -1,7 +1,7 @@
 pub(crate) mod stream;
 
 use super::TcpStream;
-use crate::reactor::{io_handle::IoHandle, Direction};
+use crate::reactor::{direction::Direction, io_handle::IoHandle};
 use futures::Stream;
 use mio::net::TcpListener as MioTcpListener;
 use std::{

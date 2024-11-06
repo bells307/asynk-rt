@@ -1,9 +1,12 @@
 use super::{Direction, Reactor};
 use mio::{event::Source, Token};
+use parking_lot::Mutex;
 use std::{
+    future::Future,
     io::{ErrorKind, Read, Result, Write},
     pin::Pin,
-    task::{Context, Poll, Waker},
+    sync::Arc,
+    task::{Context, Poll, Wake, Waker},
 };
 
 /// Wrapper for an I/O source with event tracking capabilities for reading/writing
@@ -13,10 +16,7 @@ where
 {
     /// Tracked source
     source: S,
-    /// Read waiting flag
-    waiting_read: bool,
-    /// Write waiting flag
-    waiting_write: bool,
+    registered_directions: [bool; 2],
     /// Currently registered mio token
     token: Option<Token>,
 }
@@ -30,8 +30,7 @@ where
     pub fn new(source: S) -> Self {
         Self {
             source,
-            waiting_read: false,
-            waiting_write: false,
+            registered_directions: [false, false],
             token: None,
         }
     }
@@ -52,6 +51,8 @@ where
 
         self.token = Some(token);
 
+        self.registered_directions[direction as usize] = true;
+
         Ok(())
     }
 
@@ -64,6 +65,8 @@ where
                     &mut self.source,
                     direction,
                 )?;
+
+                self.registered_directions[direction as usize] = false;
                 Ok(())
             }
             // If no token exists, there's nothing to deregister
@@ -83,6 +86,10 @@ where
             None => Ok(()),
         }
     }
+
+    pub fn check_direction(&self, direction: Direction) -> bool {
+        self.registered_directions[direction as usize]
+    }
 }
 
 impl<S> IoHandle<S>
@@ -94,9 +101,8 @@ where
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<Result<usize>> {
-        if !self.waiting_read {
+        if !self.check_direction(Direction::Read) {
             self.register_direction(Direction::Read, cx.waker().clone())?;
-            self.waiting_read = true;
             return Poll::Pending;
         }
 
@@ -104,7 +110,6 @@ where
             Ok(n) => {
                 if n == 0 {
                     self.deregister_direction(Direction::Read)?;
-                    self.waiting_read = false;
                 }
 
                 Poll::Ready(Ok(n))
@@ -124,9 +129,8 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize>> {
-        if !self.waiting_write {
+        if !self.check_direction(Direction::Write) {
             self.register_direction(Direction::Write, cx.waker().clone())?;
-            self.waiting_write = true;
             return Poll::Pending;
         }
 
@@ -134,7 +138,6 @@ where
             Ok(n) => {
                 if n == 0 {
                     self.deregister_direction(Direction::Write)?;
-                    self.waiting_write = false;
                 }
 
                 Poll::Ready(Ok(n))
@@ -145,16 +148,14 @@ where
     }
 
     pub fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        if !self.waiting_write {
+        if !self.check_direction(Direction::Write) {
             self.register_direction(Direction::Write, cx.waker().clone())?;
-            self.waiting_write = true;
             return Poll::Pending;
         }
 
         match self.source.flush() {
             Ok(()) => {
                 self.deregister_direction(Direction::Write)?;
-                self.waiting_write = false;
                 Poll::Ready(Ok(()))
             }
             Err(ref e) if e.kind() == ErrorKind::WouldBlock => Poll::Pending,
