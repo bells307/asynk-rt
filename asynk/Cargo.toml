@@ -1,7 +1,7 @@
 [package]
 name = "asynk"
 description = "Multithread asynchronous runtime and reactor"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Bells307"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
