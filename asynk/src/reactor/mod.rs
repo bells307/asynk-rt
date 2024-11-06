@@ -12,7 +12,7 @@ use std::{
 /// Reactor polls events from mio and calls wakers interested
 /// by these events
 pub struct Reactor {
-    wakers: Arc<Slab<Waker>>,
+    wakers: Arc<Slab<[Option<Waker>; 2]>>,
     registry: Registry,
 }
 
@@ -46,39 +46,60 @@ impl Reactor {
     pub fn register<S>(
         &self,
         source: &mut S,
-        interests: Interest,
+        direction: Direction,
         waker: Waker,
     ) -> io::Result<Token>
     where
         S: Source,
     {
+        let mut wakers = [None, None];
+        wakers[direction as usize] = Some(waker);
+
         let token = self
             .wakers
-            .insert(waker)
+            .insert(wakers)
             .ok_or(Error::other("slab queue is full"))?;
 
         let token = Token(token);
 
-        self.registry.register(source, token, interests)?;
+        self.registry.register(source, token, direction.into())?;
 
         Ok(token)
     }
 
-    pub fn reregister<S>(
+    /// Add a waker to track an event in one of the directions for an existing
+    /// registration.
+    pub fn add_direction_for_token<S>(
         &self,
         token: Token,
         source: &mut S,
-        interests: Interest,
+        direction: Direction,
         waker: Waker,
     ) -> io::Result<Token>
     where
         S: Source,
     {
-        self.wakers.remove(token.into());
+        let mut prev = self
+            .wakers
+            .take(token.into())
+            .ok_or_else(|| Error::other(format!("token {:?} not found", token)))?;
+
+        prev[direction as usize] = Some(waker);
+
+        let interests = match (
+            &prev[Direction::Read as usize],
+            &prev[Direction::Write as usize],
+        ) {
+            (None, Some(_)) => Interest::WRITABLE,
+            (Some(_), None) => Interest::READABLE,
+            (Some(_), Some(_)) => Interest::READABLE.add(Interest::WRITABLE),
+            // We can't reach here in theory, as the function will always receive a waker
+            (None, None) => unreachable!(),
+        };
 
         let new_token = Token(
             self.wakers
-                .insert(waker)
+                .insert(prev)
                 .ok_or(Error::other("slab queue is full"))?,
         );
 
@@ -87,7 +108,49 @@ impl Reactor {
         Ok(new_token)
     }
 
-    pub fn poll_events_loop(wakers: Arc<Slab<Waker>>, mut poll: Poll) {
+    /// Remove a waker from tracking by direction for an existing registration. Returns
+    /// `Ok(None)` if no tracking directions are left for the registration and it has been removed.
+    pub fn remove_direction_for_token<S>(
+        &self,
+        token: Token,
+        source: &mut S,
+        direction: Direction,
+    ) -> io::Result<Option<Token>>
+    where
+        S: Source,
+    {
+        let mut prev = self
+            .wakers
+            .take(token.into())
+            .ok_or_else(|| Error::other(format!("token {:?} not found", token)))?;
+
+        prev[direction as usize] = None;
+
+        let interests = match (
+            &prev[Direction::Read as usize],
+            &prev[Direction::Write as usize],
+        ) {
+            (None, Some(_)) => Interest::WRITABLE,
+            (Some(_), None) => Interest::READABLE,
+            (Some(_), Some(_)) => Interest::READABLE.add(Interest::WRITABLE),
+            (None, None) => {
+                self.registry.deregister(source)?;
+                return Ok(None);
+            }
+        };
+
+        let new_token = Token(
+            self.wakers
+                .insert(prev)
+                .ok_or(Error::other("slab queue is full"))?,
+        );
+
+        self.registry.reregister(source, new_token, interests)?;
+
+        Ok(Some(new_token))
+    }
+
+    pub fn poll_events_loop(wakers: Arc<Slab<[Option<Waker>; 2]>>, mut poll: Poll) {
         let mut events = Events::with_capacity(1024);
 
         loop {
@@ -96,9 +159,17 @@ impl Reactor {
             for event in events.into_iter() {
                 println!("got event {:?} for {:?}", event, event.token());
 
-                if let Some(waker) = wakers.get(event.token().into()) {
+                if let Some(wakers) = wakers.get(event.token().into()) {
                     // Call waker interested by this event
-                    waker.wake_by_ref();
+                    if event.is_readable() {
+                        if let Some(w) = &wakers[0] {
+                            w.wake_by_ref();
+                        }
+                    } else if event.is_writable() {
+                        if let Some(w) = &wakers[1] {
+                            w.wake_by_ref();
+                        }
+                    }
                 }
             }
         }
@@ -110,7 +181,23 @@ impl Reactor {
         S: Source,
     {
         self.registry.deregister(source)?;
-        self.wakers.get(token.0);
+        self.wakers.remove(token.0);
         Ok(())
+    }
+}
+
+/// Direction of interest tracking - for reading or writing
+#[derive(Clone, Copy)]
+pub enum Direction {
+    Read = 0,
+    Write = 1,
+}
+
+impl From<Direction> for Interest {
+    fn from(value: Direction) -> Self {
+        match value {
+            Direction::Read => Interest::READABLE,
+            Direction::Write => Interest::WRITABLE,
+        }
     }
 }

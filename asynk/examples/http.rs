@@ -1,10 +1,6 @@
-use asynk::net::{TcpListener, TcpStream};
-use futures::{future, AsyncReadExt, AsyncWriteExt, StreamExt};
-use futures_timer::Delay;
-use std::{
-    io::{self, Error},
-    time::Duration,
-};
+use asynk::net::TcpListener;
+use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
+use std::io::{self, Error};
 
 const SERVER_SOCK_ADDR: &str = "127.0.0.1:8040";
 
@@ -21,10 +17,6 @@ fn main() {
 
     asynk::block_on(async {
         let server = asynk::spawn(server());
-        // let client = asynk::spawn(client());
-        // let (server, client) = future::join(server, client).await;
-        // server.unwrap().unwrap();
-        // client.unwrap().unwrap();
         server.await.unwrap().unwrap()
     })
     .unwrap();
@@ -73,24 +65,4 @@ async fn server() -> io::Result<()> {
     }
 
     Ok(())
-}
-
-async fn client() -> io::Result<()> {
-    let addr = SERVER_SOCK_ADDR.parse().map_err(Error::other)?;
-
-    loop {
-        let mut stream = TcpStream::connect(addr)?;
-
-        let req = format!("GET / HTTP/1.1\r\nHost:{}\r\n\r\n", addr);
-        stream.write_all(req.as_bytes()).await?;
-
-        let mut resp = String::with_capacity(128);
-        stream.read_to_string(&mut resp).await?;
-
-        println!("resp: {resp}");
-
-        stream.flush().await?;
-
-        Delay::new(Duration::from_millis(100)).await;
-    }
 }

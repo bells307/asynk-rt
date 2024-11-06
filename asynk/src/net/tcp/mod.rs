@@ -1,9 +1,9 @@
 pub(crate) mod stream;
 
 use super::TcpStream;
-use crate::reactor::io_handle::IoHandle;
+use crate::reactor::{io_handle::IoHandle, Direction};
 use futures::Stream;
-use mio::{net::TcpListener as MioTcpListener, Interest};
+use mio::net::TcpListener as MioTcpListener;
 use std::{
     io::{self, Result},
     net::SocketAddr,
@@ -38,7 +38,8 @@ impl Stream for Accept {
         match self.0.source().accept() {
             Ok((stream, addr)) => Poll::Ready(Some(Ok((stream.into(), addr)))),
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                self.0.register(Interest::READABLE, cx.waker().clone())?;
+                self.0
+                    .register_direction(Direction::Read, cx.waker().clone())?;
                 Poll::Pending
             }
             Err(e) => Poll::Ready(Some(Err(e))),
