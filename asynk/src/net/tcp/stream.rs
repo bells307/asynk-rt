@@ -1,4 +1,4 @@
-use crate::reactor::io_handle::IoHandle;
+use crate::reactor::non_blocking::NonBlocking;
 use futures::{AsyncRead, AsyncWrite};
 use mio::{net::TcpStream as MioTcpStream, Interest};
 use std::{
@@ -11,18 +11,18 @@ use std::{
 /// A non-blocking TCP stream between a local socket and a remote socket.
 ///
 /// The socket will be closed when the value is dropped.
-pub struct TcpStream(IoHandle<MioTcpStream>);
+pub struct TcpStream(NonBlocking<MioTcpStream>);
 
 impl TcpStream {
-    pub(crate) fn new(io_handle: IoHandle<MioTcpStream>) -> Self {
-        Self(io_handle)
+    pub(crate) fn new(tcp_stream: NonBlocking<MioTcpStream>) -> Self {
+        Self(tcp_stream)
     }
 
     /// Create a new TCP stream and issue a non-blocking connect to the
     /// specified address.
     pub fn connect(addr: SocketAddr) -> Result<Self> {
         let stream = MioTcpStream::connect(addr)?;
-        Ok(Self(IoHandle::try_new(
+        Ok(Self(NonBlocking::try_new(
             stream,
             Interest::READABLE.add(Interest::WRITABLE),
         )?))

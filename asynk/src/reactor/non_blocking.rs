@@ -1,14 +1,14 @@
-use super::{direction::WakerMap, Direction, Reactor};
+use super::{waker_map::WakerMap, Reactor};
 use mio::{event::Source, Interest, Token};
 use std::{
     io::{self, ErrorKind, Read, Write},
     ops::Deref,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
-/// Wrapper for an I/O source with event tracking capabilities for reading/writing
-pub struct IoHandle<S>
+/// Wrapper for an I/O source with event tracking capabilities for non-blocking reading/writing
+pub struct NonBlocking<S>
 where
     S: Source,
 {
@@ -18,9 +18,9 @@ where
     token: Token,
 }
 
-impl<S> Unpin for IoHandle<S> where S: Source {}
+impl<S> Unpin for NonBlocking<S> where S: Source {}
 
-impl<S> Deref for IoHandle<S>
+impl<S> Deref for NonBlocking<S>
 where
     S: Source,
 {
@@ -31,7 +31,7 @@ where
     }
 }
 
-impl<S> IoHandle<S>
+impl<S> NonBlocking<S>
 where
     S: Source,
 {
@@ -53,20 +53,20 @@ where
 pub fn poll_io<T>(
     token: Token,
     cx: &mut Context<'_>,
-    direction: Direction,
+    interests: Interest,
     mut f: impl FnMut() -> io::Result<T>,
 ) -> Poll<io::Result<T>> {
     match f() {
         Ok(n) => Poll::Ready(Ok(n)),
         Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-            Reactor::get().set_waker(token, direction, cx.waker().clone())?;
+            Reactor::get().set_waker(token, interests, cx.waker().clone())?;
             Poll::Pending
         }
         Err(e) => Poll::Ready(Err(e)),
     }
 }
 
-impl<S> IoHandle<S>
+impl<S> NonBlocking<S>
 where
     S: Source + Read,
 {
@@ -75,11 +75,11 @@ where
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        poll_io(self.token, cx, Direction::Read, || self.source.read(buf))
+        poll_io(self.token, cx, Interest::READABLE, || self.source.read(buf))
     }
 }
 
-impl<S> IoHandle<S>
+impl<S> NonBlocking<S>
 where
     S: Source + Write,
 {
@@ -88,15 +88,17 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        poll_io(self.token, cx, Direction::Write, || self.source.write(buf))
+        poll_io(self.token, cx, Interest::WRITABLE, || {
+            self.source.write(buf)
+        })
     }
 
     pub fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        poll_io(self.token, cx, Direction::Write, || self.source.flush())
+        poll_io(self.token, cx, Interest::WRITABLE, || self.source.flush())
     }
 }
 
-impl<S> Drop for IoHandle<S>
+impl<S> Drop for NonBlocking<S>
 where
     S: Source,
 {

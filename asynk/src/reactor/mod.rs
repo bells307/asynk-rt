@@ -1,8 +1,7 @@
-pub mod io_handle;
+pub mod non_blocking;
 
-pub(crate) mod direction;
+pub(crate) mod waker_map;
 
-use direction::{Direction, WakerMap};
 use mio::{event::Source, Events, Interest, Poll, Registry, Token};
 use parking_lot::Mutex;
 use slab::Slab;
@@ -12,6 +11,10 @@ use std::{
     task::Waker,
     thread::{self},
 };
+use waker_map::WakerMap;
+
+const READ_INTEREST_IDX: usize = 0;
+const WRITE_INTEREST_IDX: usize = 1;
 
 /// Reactor polls events from mio and calls wakers interested
 /// by these events
@@ -63,14 +66,14 @@ impl Reactor {
 
     /// Add a waker to track an event in one of the directions for an existing
     /// registration.
-    pub fn set_waker(&self, token: Token, direction: Direction, waker: Waker) -> io::Result<()> {
+    pub fn set_waker(&self, token: Token, interests: Interest, waker: Waker) -> io::Result<()> {
         let mut lock = self.wakers.lock();
 
         let prev = lock
             .get_mut(token.into())
             .ok_or_else(|| Error::other(format!("token {:?} not found", token)))?;
 
-        prev.set_waker(direction, waker);
+        prev.set_waker(interests, waker);
 
         Ok(())
     }
@@ -98,13 +101,13 @@ fn poll_events_loop(waker_map: Arc<Mutex<Slab<WakerMap>>>, mut poll: Poll) {
 
                 // Call waker interested by this event
                 if event.is_readable() {
-                    if let Some(w) = &wakers[Direction::Read as usize] {
+                    if let Some(w) = &wakers[READ_INTEREST_IDX] {
                         w.wake_by_ref();
                     }
                 };
 
                 if event.is_writable() {
-                    if let Some(w) = &wakers[Direction::Write as usize] {
+                    if let Some(w) = &wakers[WRITE_INTEREST_IDX] {
                         w.wake_by_ref();
                     }
                 }

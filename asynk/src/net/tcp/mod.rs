@@ -1,10 +1,7 @@
 pub(crate) mod stream;
 
 use super::TcpStream;
-use crate::reactor::{
-    direction::Direction,
-    io_handle::{poll_io, IoHandle},
-};
+use crate::reactor::non_blocking::{poll_io, NonBlocking};
 use futures::Stream;
 use mio::{net::TcpListener as MioTcpListener, Interest};
 use std::{
@@ -36,23 +33,25 @@ impl TcpListener {
     /// If an accepted stream is returned, the remote address of the peer is
     /// returned along with it.
     pub fn accept(self) -> io::Result<Accept> {
-        let io_handle = IoHandle::try_new(self.0, Interest::READABLE)?;
-        Ok(Accept(io_handle))
+        let non_blocking = NonBlocking::try_new(self.0, Interest::READABLE)?;
+        Ok(Accept(non_blocking))
     }
 }
 
-pub struct Accept(IoHandle<MioTcpListener>);
+pub struct Accept(NonBlocking<MioTcpListener>);
 
 impl Stream for Accept {
     type Item = Result<(TcpStream, SocketAddr)>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let (stream, addr) = ready!(poll_io(self.0.token(), cx, Direction::Read, || self
+        let (stream, addr) = ready!(poll_io(self.0.token(), cx, Interest::READABLE, || self
             .0
             .accept()))?;
 
-        let io_handle = IoHandle::try_new(stream, Interest::READABLE.add(Interest::WRITABLE))?;
-        let tcp_stream = TcpStream::new(io_handle);
+        let non_blocking =
+            NonBlocking::try_new(stream, Interest::READABLE.add(Interest::WRITABLE))?;
+
+        let tcp_stream = TcpStream::new(non_blocking);
         Poll::Ready(Some(Ok((tcp_stream, addr))))
     }
 }
