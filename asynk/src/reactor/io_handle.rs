@@ -124,8 +124,6 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize>> {
-        println!("{:?}: poll_write", self.token);
-
         if !self.waiting_write {
             self.register_direction(Direction::Write, cx.waker().clone())?;
             self.waiting_write = true;
