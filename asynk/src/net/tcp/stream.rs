@@ -8,13 +8,18 @@ use std::{
     task::{Context, Poll},
 };
 
+/// A non-blocking TCP stream between a local socket and a remote socket.
+///
+/// The socket will be closed when the value is dropped.
 pub struct TcpStream(IoHandle<MioTcpStream>);
 
 impl TcpStream {
-    pub fn new(io_handle: IoHandle<MioTcpStream>) -> Self {
+    pub(crate) fn new(io_handle: IoHandle<MioTcpStream>) -> Self {
         Self(io_handle)
     }
 
+    /// Create a new TCP stream and issue a non-blocking connect to the
+    /// specified address.
     pub fn connect(addr: SocketAddr) -> Result<Self> {
         let stream = MioTcpStream::connect(addr)?;
         Ok(Self(IoHandle::try_new(
@@ -48,6 +53,6 @@ impl AsyncWrite for TcpStream {
     }
 
     fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
-        Poll::Ready(self.0.source().shutdown(Shutdown::Both))
+        Poll::Ready(self.0.shutdown(Shutdown::Both))
     }
 }

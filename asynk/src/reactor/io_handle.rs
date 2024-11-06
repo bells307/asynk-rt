@@ -2,6 +2,7 @@ use super::{direction::WakerMap, Direction, Reactor};
 use mio::{event::Source, Interest, Token};
 use std::{
     io::{self, ErrorKind, Read, Write},
+    ops::Deref,
     pin::Pin,
     task::{Context, Poll, Waker},
 };
@@ -19,6 +20,17 @@ where
 
 impl<S> Unpin for IoHandle<S> where S: Source {}
 
+impl<S> Deref for IoHandle<S>
+where
+    S: Source,
+{
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.source
+    }
+}
+
 impl<S> IoHandle<S>
 where
     S: Source,
@@ -28,9 +40,8 @@ where
         Ok(Self { source, token })
     }
 
-    /// Reference to the tracked source
-    pub fn source(&self) -> &S {
-        &self.source
+    pub fn token(&self) -> Token {
+        self.token
     }
 
     /// Set waker for direction
@@ -39,25 +50,25 @@ where
         Ok(())
     }
 
-    pub fn poll_io<T>(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        direction: Direction,
-        mut f: impl FnMut(&mut S) -> io::Result<T>,
-    ) -> Poll<io::Result<T>> {
-        match f(&mut self.as_mut().source) {
-            Ok(n) => Poll::Ready(Ok(n)),
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                self.set_waker(direction, cx.waker().clone())?;
-                Poll::Pending
-            }
-            Err(e) => Poll::Ready(Err(e)),
-        }
-    }
-
     /// Deregister source
     fn deregister(&mut self) -> io::Result<()> {
         Reactor::get().deregister(self.token, &mut self.source)
+    }
+}
+
+pub fn poll_io<T>(
+    token: Token,
+    cx: &mut Context<'_>,
+    direction: Direction,
+    mut f: impl FnMut() -> io::Result<T>,
+) -> Poll<io::Result<T>> {
+    match f() {
+        Ok(n) => Poll::Ready(Ok(n)),
+        Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+            Reactor::get().set_waker(token, direction, cx.waker().clone())?;
+            Poll::Pending
+        }
+        Err(e) => Poll::Ready(Err(e)),
     }
 }
 
@@ -70,8 +81,7 @@ where
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        self.as_mut()
-            .poll_io(cx, Direction::Read, |source| source.read(buf))
+        poll_io(self.token, cx, Direction::Read, || self.source.read(buf))
     }
 }
 
@@ -84,13 +94,11 @@ where
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        self.as_mut()
-            .poll_io(cx, Direction::Write, |source| source.write(buf))
+        poll_io(self.token, cx, Direction::Write, || self.source.write(buf))
     }
 
     pub fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        self.as_mut()
-            .poll_io(cx, Direction::Read, |source| source.flush())
+        poll_io(self.token, cx, Direction::Write, || self.source.flush())
     }
 }
 
