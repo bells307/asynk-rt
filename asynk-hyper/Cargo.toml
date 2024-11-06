@@ -10,7 +10,7 @@ repository = "https://github.com/bells307/asynk-rt.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-asynk = { path = "../asynk" }
+asynk = { path = "../asynk", version = "0.1.0" }
 
 hyper = { version = "1.2.0", features = ["server", "http1", "http2"] }
 futures = "0.3.30"
