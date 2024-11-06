@@ -1,14 +1,17 @@
 pub(crate) mod stream;
 
 use super::TcpStream;
-use crate::reactor::{direction::Direction, io_handle::IoHandle};
+use crate::reactor::{
+    direction::Direction,
+    io_handle::{poll_io, IoHandle},
+};
 use futures::Stream;
 use mio::{net::TcpListener as MioTcpListener, Interest};
 use std::{
     io::{self, Result},
     net::SocketAddr,
     pin::Pin,
-    task::{Context, Poll},
+    task::{ready, Context, Poll},
 };
 
 /// A structure representing a TCP listener.
@@ -44,18 +47,12 @@ impl Stream for Accept {
     type Item = Result<(TcpStream, SocketAddr)>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.0.accept() {
-            Ok((stream, addr)) => {
-                let io_handle =
-                    IoHandle::try_new(stream, Interest::READABLE.add(Interest::WRITABLE))?;
+        let (stream, addr) = ready!(poll_io(self.0.token(), cx, Direction::Read, || self
+            .0
+            .accept()))?;
 
-                Poll::Ready(Some(Ok((TcpStream::new(io_handle), addr))))
-            }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                self.0.set_waker(Direction::Read, cx.waker().clone())?;
-                Poll::Pending
-            }
-            Err(e) => Poll::Ready(Some(Err(e))),
-        }
+        let io_handle = IoHandle::try_new(stream, Interest::READABLE.add(Interest::WRITABLE))?;
+        let tcp_stream = TcpStream::new(io_handle);
+        Poll::Ready(Some(Ok((tcp_stream, addr))))
     }
 }

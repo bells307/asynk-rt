@@ -44,12 +44,6 @@ where
         self.token
     }
 
-    /// Set waker for direction
-    pub fn set_waker(&self, direction: Direction, waker: Waker) -> io::Result<()> {
-        Reactor::get().set_waker(self.token, direction, waker)?;
-        Ok(())
-    }
-
     /// Deregister source
     fn deregister(&mut self) -> io::Result<()> {
         Reactor::get().deregister(self.token, &mut self.source)
