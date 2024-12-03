@@ -6,15 +6,18 @@ use self::task::{BlockedOnTaskWaker, SpawnedTaskWaker, Task};
 use crate::JoinHandle;
 use futures::channel::oneshot;
 use parking_lot::Mutex;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, OnceLock};
-use std::task::{Context, Poll, Wake};
-use std::thread::{self, Thread};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, OnceLock},
+    task::{Context, Poll, Wake},
+    thread::{self, Thread},
+};
 use tpool::ThreadPool;
+use zeet::WorkStealThreadPool;
 
 pub struct Executor {
-    task_tp: ThreadPool,
+    task_tp: WorkStealThreadPool,
     blocking_tp: ThreadPool,
     block_on_thr: Mutex<Option<Thread>>,
 }
@@ -22,7 +25,7 @@ pub struct Executor {
 static EXECUTOR: OnceLock<Executor> = OnceLock::new();
 
 impl Executor {
-    pub fn new(task_tp: ThreadPool, blocking_tp: ThreadPool) -> Self {
+    pub fn new(task_tp: WorkStealThreadPool, blocking_tp: ThreadPool) -> Self {
         Self {
             task_tp,
             blocking_tp,

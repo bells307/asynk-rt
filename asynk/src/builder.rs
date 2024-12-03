@@ -1,6 +1,7 @@
 use crate::{reactor::Reactor, Executor};
 use std::{io, num::NonZeroUsize};
 use tpool::ThreadPool;
+use zeet::WorkStealThreadPool;
 
 #[derive(Default)]
 pub struct AsynkBuilder {
@@ -25,7 +26,10 @@ impl AsynkBuilder {
 
     pub fn build(self) -> io::Result<()> {
         let task_threads = self.task_threads.unwrap_or_else(Self::default_thread_count);
-        let task_tp = ThreadPool::new(task_threads);
+
+        let task_tp = WorkStealThreadPool::builder()
+            .max_threads(task_threads)
+            .build();
 
         let blocking_threads = self
             .blocking_threads
